@@ -22,10 +22,10 @@
  * DKBTrace Ver 2.0-2.12 were written by David K. Buck & Aaron A. Collins.
  *---------------------------------------------------------------------------
  * $File: //depot/povray/3.6-release/source/parse.cpp $
- * $Revision: #3 $
- * $Change: 3032 $
- * $DateTime: 2004/08/02 18:43:41 $
- * $Author: chrisc $
+ * $Revision: #2 $
+ * $Change: 2939 $
+ * $DateTime: 2004/07/05 03:43:26 $
+ * $Author: root $
  * $Log$
  *****************************************************************************/
 
@@ -35,6 +35,7 @@
 
 #include "frame.h"
 #include "vector.h"
+#include "povproto.h"
 #include "parse.h"
 #include "parstxtr.h"
 #include "parsestr.h"
@@ -112,6 +113,18 @@ extern int tempfunc; // GLOBAL VARIABLE
 extern int backtraceFlag; // GLOBAL VARIABLE
 
 extern PHOTON_OPTIONS photonOptions; // GLOBAL VARIABLE
+
+
+
+// !!!! New for SAR simulator
+  // added by Stefan Auer, May 2009
+
+DBL SAR_Output_Data_Flag = 0.0;
+DBL SAR_Intersection_Flag = 0.0;
+
+// !!!
+
+
 
 /*****************************************************************************
 * External functions
@@ -6241,6 +6254,21 @@ static void Parse_Global_Settings()
          END_CASE
        END_EXPECT
      END_CASE
+
+	 
+	 // !!! New for SAR Simulator, added by Stefan Auer, May 2009
+     	 
+	 CASE (SAR_OUTPUT_DATA_TOKEN)
+		   SAR_Output_Data_Flag = Parse_Float ();
+	 END_CASE
+
+	 CASE (SAR_INTERSECTION_TOKEN)
+		  SAR_Intersection_Flag = Parse_Float ();
+	 END_CASE
+
+	 // !!! 
+
+
      CASE (ASSUMED_GAMMA_TOKEN)
      {
        DBL AssumedGamma;

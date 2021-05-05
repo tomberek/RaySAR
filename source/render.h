@@ -24,7 +24,7 @@
  * $File: //depot/povray/3.6-release/source/render.h $
  * $Revision: #2 $
  * $Change: 2939 $
- * $DateTime: 2004/07/04 13:43:26 $
+ * $DateTime: 2004/07/05 03:43:26 $
  * $Author: root $
  * $Log$
  *****************************************************************************/
@@ -74,6 +74,24 @@ extern int Current_Line_Number;
 extern int Trace_Level, Max_Trace_Level, Highest_Trace_Level;
 extern bool Had_Max_Trace_Level;
 extern DBL Total_Depth;
+
+
+
+//new for Radar simulator!!!!!!!!!!!!!!!!!
+extern DBL Intensity_Radar;
+extern DBL Distance_Radar;
+extern DBL Azimuth_Initial;
+extern DBL Elevation_Initial;
+extern DBL Reflectivity_Bounce;
+extern DBL Reflectivity_Bounce_Temp;
+extern int mark_specular;
+extern VECTOR Pixel_Initial_Radar;
+extern VECTOR Direction_Primary_Ray;
+extern VECTOR Direction_Current_Ray;
+extern FILE *pFile_A;
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
 
 /* Object-Ray Options [ENB 9/97] */
 extern bool In_Reflection_Ray;

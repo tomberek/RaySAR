@@ -24,7 +24,7 @@
  * $File: //depot/povray/3.6-release/source/vector.h $
  * $Revision: #2 $
  * $Change: 2939 $
- * $DateTime: 2004/07/04 13:43:26 $
+ * $DateTime: 2004/07/05 03:43:26 $
  * $Author: root $
  * $Log$
  *****************************************************************************/
@@ -449,6 +449,76 @@ inline void V4D_Dot(DBL& a, const VECTOR_4D b, const VECTOR_4D c)
 {
 	a = b[X] * c[X] + b[Y] * c[Y] + b[Z] * c[Z] + b[T] * c[T];
 }
+
+
+
+
+//****************************************************************
+//new for Radar Simulation
+
+// Intersection between straight and plane
+
+inline void straight_intersection(VECTOR &I, const VECTOR Vec_i, const VECTOR Vec_id, const VECTOR Pixel_C, const VECTOR Vec_norm)
+{
+	// input: 
+	// - Vec_i: starting point of straight (= intersection point of last object)
+	// - Vec_id: direction vector of straight (= inverse direction of primary ray)
+	// - Pixel_C: 3D position of current pixel 
+	// - Vec_norm: normal vector of plane (= direction of primary ray)
+
+	// output:
+	// - I: 3D intersection point of ridge line and a perpendicular plane containing the edge
+
+	//*****************************************************************************************
+
+	DBL Norm_n, Norm_id;
+	VECTOR Vec_id_norm, Vec_n_norm;
+
+	// Normalize Vectors
+
+	// Vector 1
+	Norm_id = sqrt(pow(Vec_id[0],2)+pow(Vec_id[1],2)+pow(Vec_id[2],2));
+
+	// normalize
+	Vec_id_norm[0]=Vec_id[0]/Norm_id;
+	Vec_id_norm[1]=Vec_id[1]/Norm_id;
+	Vec_id_norm[2]=Vec_id[2]/Norm_id;
+
+	// Vector 2
+	Norm_n = sqrt(pow(Vec_norm[0],2)+pow(Vec_norm[1],2)+pow(Vec_norm[2],2));
+
+	// normalize
+	Vec_n_norm[0]=Vec_norm[0]/Norm_n;
+	Vec_n_norm[1]=Vec_norm[1]/Norm_n;
+	Vec_n_norm[2]=Vec_norm[2]/Norm_n;
+
+	//*****************************************************************************************
+
+    // straight: Vec_straight = Vec_i + t*Vec_id
+
+	DBL t,d,p,num,denom;
+
+	// Distance d between origin and plane
+	d = Vec_n_norm[0]*Pixel_C[0]+Vec_n_norm[1]*Pixel_C[1]+Vec_n_norm[2]*Pixel_C[2];
+
+	// numerator
+	p = Vec_n_norm[0]*Vec_i[0]+Vec_n_norm[1]*Vec_i[1]+Vec_n_norm[2]*Vec_i[2];
+
+	num = d-p;
+
+	// denominator
+	denom = Vec_n_norm[0]*Vec_id_norm[0]+Vec_n_norm[1]*Vec_id_norm[1]+Vec_n_norm[2]*Vec_id_norm[2];
+
+	// factor t = numerator/denominator
+
+	t = num/denom;
+
+	// Intersection point
+
+	VEvaluateRay(I,Vec_i,t,Vec_id_norm);
+}
+
+
 
 END_POV_NAMESPACE
 

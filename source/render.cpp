@@ -26,10 +26,10 @@
  * DKBTrace Ver 2.0-2.12 were written by David K. Buck & Aaron A. Collins.
  *---------------------------------------------------------------------------
  * $File: //depot/povray/3.6-release/source/render.cpp $
- * $Revision: #4 $
- * $Change: 3032 $
- * $DateTime: 2004/08/02 18:43:41 $
- * $Author: chrisc $
+ * $Revision: #2 $
+ * $Change: 2939 $
+ * $DateTime: 2004/07/05 03:43:26 $
+ * $Author: root $
  * $Log$
  *****************************************************************************/
 
@@ -38,6 +38,7 @@
 
 #include "frame.h"
 #include "vector.h"
+#include "povproto.h"
 #include "bbox.h"
 #include "chi2.h"
 #include "colour.h"
@@ -119,6 +120,35 @@ struct Pixel_Struct
 
 /* NK depth */
 DBL Total_Depth = 0.0; // GLOBAL VARIABLE
+
+
+
+
+
+
+//***************************************
+// new for radar simulator!!!
+DBL Intensity_Radar = 0.0;
+DBL Distance_Radar = 0.0;
+DBL Azimuth_Initial = 0.0;
+DBL Elevation_Initial = 0.0;
+DBL Reflectivity_Bounce = 0.0;
+DBL Reflectivity_Bounce_Temp;
+int mark_specular;
+VECTOR Pixel_Initial_Radar;
+VECTOR Direction_Primary_Ray;
+VECTOR Direction_Current_Ray;
+FILE *pFile_A;
+
+//const int contribution_max = opts.Last_Line*opts.Last_Column;
+//extern DBL Contributions_Radar [contribution_max][4];
+//extern DBL Contribution_Line = 1.0;
+//***************************************
+
+
+
+
+
 
 COLOUR *Previous_Line = NULL, *Current_Line = NULL, *Temp_Line = NULL; // GLOBAL VARIABLE
 char *Previous_Line_Antialiased_Flags = NULL, *Current_Line_Antialiased_Flags = NULL; // GLOBAL VARIABLE
@@ -1299,6 +1329,18 @@ void Start_Non_Adaptive_Tracing()
   int first_line;
   int skip_odd_lines;
 
+  //***************************************
+  // new for radar simulator!!!
+
+  if (SAR_Output_Data_Flag == 1.0){
+    char a[32];
+    sprintf(a,"Contributions_%06.2f.txt",opts.FrameSeq.Clock_Value);
+	pFile_A = fopen(a,"w");
+  }
+
+  //***************************************
+
+
   /* Set jitterscale. */
 
   JitterScale = opts.JitterScale / (DBL)opts.AntialiasDepth;
@@ -1372,6 +1414,13 @@ void Start_Non_Adaptive_Tracing()
 
 //      Debug_Info("y = %3d, x = %3d\n", Current_Line_Number, x);
 
+
+	  // New for Radar Simulator!!!
+	  // Reset
+	  Reflectivity_Bounce = 1;
+	  // New for Radar Simulator!!!
+
+
       trace_pixel(x, Current_Line_Number, Current_Line[x], unclippedColour);
 
       /* Apply anti-aliasing. */
@@ -1399,6 +1448,16 @@ void Start_Non_Adaptive_Tracing()
   {
     output_single_image_line_with_alpha_correction(Previous_Line,opts.Last_Line - 1);
   }
+
+  
+  // new for radar simulation
+  if (SAR_Output_Data_Flag == 1.0){
+	fclose (pFile_A);
+  }
+
+  // new for radar simulation
+
+
 }
 
 
@@ -1422,7 +1481,7 @@ void Start_Non_Adaptive_Tracing()
 * DESCRIPTION
 *
 *   Trace pixels by shooting rays at each corner of a pixel and subdividing
-*   if the colors ate the pixel's corenr differ too much. The subdivision
+*   if the colors at the pixel's corner differ too much. The subdivision
 *   is made recursively by further subdividing those sub-pixels whose colors
 *   differ too much.
 *
@@ -1445,7 +1504,7 @@ void Start_Adaptive_Tracing()
   int x, y, xx, xxx, yy, skip_odd_lines;
   int sub_pixel_size, antialias_line = true;
   long size;
-  COLOUR unclippedColour;
+  COLOUR clippedColour, unclippedColour;
   PIXEL *First_Row, *Last_Row, *TempRow;
   PIXEL **Block;
   PIXEL TempPixel;
@@ -1458,7 +1517,7 @@ void Start_Adaptive_Tracing()
 
     return;
   }
-  
+
   /* Init color. */
 
   Make_ColourA(unclippedColour, 0.0, 0.0, 0.0, 0.0, 0.0);
@@ -1559,7 +1618,7 @@ void Start_Adaptive_Tracing()
      ************************************************************************/
 
     for (x = opts.First_Column; x < opts.Last_Column; x++)
-    {
+	{
       Check_User_Abort(false);
 
       Increase_Counter(stats[Number_Of_Pixels]);
@@ -1590,7 +1649,9 @@ void Start_Adaptive_Tracing()
 
       POV_PRE_PIXEL (x, Current_Line_Number, unclippedColour)
       trace_sub_pixel(1, Block, x, Current_Line_Number, 0, 0, sub_pixel_size, sub_pixel_size, sub_pixel_size, unclippedColour, antialias_line);
-      POV_POST_PIXEL (x, Current_Line_Number, unclippedColour)
+      Clip_Colour(clippedColour, unclippedColour);
+      gamma_correct(clippedColour);
+      POV_POST_PIXEL (x, Current_Line_Number, clippedColour)
 
       /* Do histogram stuff. */
 
@@ -1601,12 +1662,12 @@ void Start_Adaptive_Tracing()
 
       /* Store colour in current line */
 
-      Assign_Colour(Current_Line[x], unclippedColour);
+      Assign_Colour(Current_Line[x], clippedColour);
       
       /* Display pixel */
       POV_ASSIGN_PIXEL_UNCLIPPED (x, Current_Line_Number, unclippedColour)
-      plot_pixel(x, Current_Line_Number, unclippedColour);
-      POV_ASSIGN_PIXEL (x, Current_Line_Number, unclippedColour)
+      plot_pixel(x, Current_Line_Number, clippedColour);
+      POV_ASSIGN_PIXEL (x, Current_Line_Number, clippedColour)
 
       /* Store current block in rows */
 
@@ -1754,7 +1815,7 @@ DBL Trace(RAY *Ray, COLOUR Colour, DBL Weight)
 
   /* What objects does this ray intersect? */
 
-  Intersection_Found = false;
+  Intersection_Found = false; // Hypothesis
 
   Best_Intersection.Depth = BOUND_HUGE;
   Best_Intersection.Object = NULL;
@@ -1770,7 +1831,6 @@ DBL Trace(RAY *Ray, COLOUR Colour, DBL Weight)
             if (New_Intersection.Depth < Best_Intersection.Depth)
             {
               Best_Intersection = New_Intersection;
-
               Intersection_Found = true;
             }
           }
@@ -1784,12 +1844,10 @@ DBL Trace(RAY *Ray, COLOUR Colour, DBL Weight)
            &Best_Intersection, &Object, false);
   }
 
-  /* Get color for this ray. */
-
-  if (Intersection_Found)
+  /* Get color for this ray. */  
+  if (Intersection_Found) // check hypothesis
   {
     /* NK phmap */
-
     oldptflag = photonOptions.passThruPrev;
     photonOptions.passThruPrev = photonOptions.passThruThis;
 
@@ -1797,7 +1855,7 @@ DBL Trace(RAY *Ray, COLOUR Colour, DBL Weight)
     {
       photonOptions.passThruThis = false;
       if((Trace_Level==1) || photonOptions.passThruPrev)
-      {
+	  {
         if (Test_Flag(Best_Intersection.Object, PH_TARGET_FLAG))
         {
           if (!IsObjectInCSG(Best_Intersection.Object,photonOptions.photonObject))
@@ -1835,7 +1893,7 @@ DBL Trace(RAY *Ray, COLOUR Colour, DBL Weight)
       }
       
       photonOptions.hitObject = true;  /* we need to know that we hit it */
-    }
+	}
 
     /* Determine colour of object hit. */
 
@@ -1845,7 +1903,8 @@ DBL Trace(RAY *Ray, COLOUR Colour, DBL Weight)
     photonOptions.passThruThis = photonOptions.passThruPrev;
     photonOptions.passThruPrev = oldptflag;
   }
-  else
+
+  else // no intersection found!
   {
     /* Infinite ray, set intersecton distance. */
 
@@ -2111,6 +2170,8 @@ static void supersample(COLOUR result, int x, int  y)
   /* Average pixel's color. */
   Scale_Colour(result,result,(1.0/samples));
 
+  Clip_Colour(result, result);
+  gamma_correct(result);
 }
 
 
@@ -2303,6 +2364,18 @@ static void trace_ray_with_offset(int x, int  y, DBL dx, DBL dy, COLOUR Colour)
 {
   DBL Jitter_X, Jitter_Y;
 
+  
+
+  //*****************************************
+  //New for Radar Simulator
+		
+  // Reset
+  Distance_Radar = 0.0;
+
+  //*****************************************
+
+
+
   if (Focal_Blur_Is_Used)
   {
     focal_blur(&Camera_Ray, Colour, (DBL)x, (DBL)y);
@@ -2321,7 +2394,7 @@ static void trace_ray_with_offset(int x, int  y, DBL dx, DBL dy, COLOUR Colour)
     }
 
     if (create_ray (&Camera_Ray, (DBL)x+dx+Jitter_X, (DBL)y+dy+Jitter_Y, 0))
-    {
+	{
       Trace_Level = 1;
 
       Total_Depth = 0.0;  /* NK depth */
@@ -2446,8 +2519,7 @@ static void focal_blur(RAY *Ray, COLOUR Colour, DBL x, DBL  y)
 
         Trace(Ray, C, 1.0);
 
-        /* Commented out Jul 2004 C.H. */
-        /*Clip_Colour(C, C);*/
+        Clip_Colour(C, C);
 
         Add_Colour(Colour, Colour, C);
       }
@@ -2585,6 +2657,7 @@ static void jitter_camera_ray(RAY *ray, int ray_number)
 * DESCRIPTION
 *
 *   Trace a primary ray regarding focal blur and vista buffer.
+*   The color of the pixel is clipped and the number of pixels is increased.
 *
 * CHANGES
 *
@@ -2601,6 +2674,16 @@ void trace_pixel(int x, int y, COLOUR ColourClipped, COLOUR ColourUnclipped)
   Trace_Level = 1;
   In_Reflection_Ray = false; /* Object-Ray Options [$ENB 9/97] */
   In_Shadow_Ray = false; /* Object-Ray Options */
+
+
+  //*****************************************
+  //New for Radar Simulator
+		
+  // Reset
+  Distance_Radar = 0.0;
+
+  //*****************************************
+
 
   POV_PRE_PIXEL (x, y, ColourUnclipped)
 
@@ -2640,6 +2723,9 @@ void trace_pixel(int x, int y, COLOUR ColourClipped, COLOUR ColourUnclipped)
   }
 
   Assign_Colour(ColourClipped, ColourUnclipped);
+
+  Clip_Colour(ColourClipped, ColourUnclipped);
+  gamma_correct(ColourClipped);
 
   /* Do histogram stuff. */
   if (opts.histogram_on)
@@ -2777,6 +2863,30 @@ static int create_ray(RAY *Ray, DBL x, DBL  y, int ray_number)
       Assign_Vector(Ray->Direction, FCD);
 
       VLinComb3(Ray->Initial, 1.0, FCL, x0, FCR, y0, FCU);
+
+	  //**************************************************************************
+
+	  // new for radar simulator !!!
+
+	  if(Trace_Level == 1){
+
+	      // Save coordinates of pixel center (start point of primary ray)
+		  Assign_Vector(Pixel_Initial_Radar, Ray->Initial);
+
+		  DBL Azimuth_Step, Elevation_Step;
+		  VLength(Azimuth_Step,FCR);
+		  VLength(Elevation_Step,FCU);
+
+		  Azimuth_Initial = x0*Azimuth_Step; // Azimuth Coordinates of Pixel Center
+		  Elevation_Initial = y0*Elevation_Step; // Elevation Coordinates of Pixel Center 
+		  Assign_Vector(Direction_Primary_Ray, Ray->Direction);
+	  }
+
+	  // new for radar simulator !!!
+
+	  //**************************************************************************
+
+
 
       if (Focal_Blur_Is_Used)
       {
@@ -3420,7 +3530,7 @@ static void jitter_pixel_position(int x, int  y, DBL *Jitter_X, DBL  *Jitter_Y)
 *
 * DESCRIPTION
 *
-*   Initialize the containing lists of a primary ray by testing wether
+*   Initialize the containing lists of a primary ray by testing whether
 *   the ray's starting point is inside any object. All objects that the
 *   ray's origin is currently inside will be added to the containing
 *   lists.

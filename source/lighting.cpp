@@ -23,15 +23,16 @@
  * DKBTrace Ver 2.0-2.12 were written by David K. Buck & Aaron A. Collins.
  *---------------------------------------------------------------------------
  * $File: //depot/povray/3.6-release/source/lighting.cpp $
- * $Revision: #3 $
- * $Change: 3032 $
- * $DateTime: 2004/08/02 18:43:41 $
- * $Author: chrisc $
+ * $Revision: #2 $
+ * $Change: 2939 $
+ * $DateTime: 2004/07/05 03:43:26 $
+ * $Author: root $
  * $Log$
  *****************************************************************************/
 
 #include "frame.h"
 #include "vector.h"
+#include "povproto.h"
 #include "blob.h"
 #include "bbox.h"
 #include "colour.h"
@@ -53,6 +54,8 @@
 #include "texture.h"
 #include "lightgrp.h"
 #include "photons.h"
+#include "matrices.h" // new for Radar Simulation !!!!!
+#include "parse.h" // new for Radar Simulation !!!!!
 
 #include <algorithm>
 
@@ -625,11 +628,13 @@ void Determine_Apparent_Colour(INTERSECTION *Ray_Intersection, COLOUR Colour, RA
       Colour[pBLUE]  += Weight_List[i] * C1[pBLUE];
       Colour[pTRANSM]  += Weight_List[i] * C1[pTRANSM];
       /* Use transmittance value for alpha channel support. [DB] */
+
 /*
       Colour[pTRANSM] *= C1[pTRANSM];
  */
     }
   }
+ 
 
   /* Restore the light list to its original form */
 
@@ -1932,6 +1937,52 @@ void do_diffuse(FINISH *Finish, RAY *Light_Source_Ray, VECTOR Layer_Normal, COLO
 
   VDot(Cos_Angle_Of_Incidence, Layer_Normal, Light_Source_Ray->Direction);
 
+  
+  
+  // New for Radar Simulator
+
+  if (SAR_Output_Data_Flag == 1.0){
+
+	// Detect specular double and multiple bounces
+
+	DBL n;
+	VECTOR Specular_Ray;
+	DBL Angle_Diff_Radar;
+
+	// reset
+	mark_specular = 0;
+
+		//if(Trace_Level > 1){
+
+		// Create specular reflected ray
+  
+		// Calculate cosine between ray and surface normal
+		VDot(n,Direction_Current_Ray, Layer_Normal); // --> result: cos(a)
+
+		// Scale calculated cosine by minus 2
+		n *= -2.0; // --> cos(a)*(-2)
+
+		// Calcualte ray in specular direction
+		VAddScaled(Specular_Ray, Direction_Current_Ray, n, Layer_Normal);
+
+		// Calculate cosine between new ray and vector pointing to light source
+		VDot(Angle_Diff_Radar,Light_Source_Ray->Direction,Specular_Ray); // --> cos(b)
+
+		Angle_Diff_Radar = fabs(Angle_Diff_Radar); // absolute value
+
+		if(Angle_Diff_Radar > 0.9998){ // threshold: cosine(1°) --> cos(1*(pi/180)) = 0.9998
+
+			// specular direction points to light source
+			// --> specular reflected component, but diffuse evaluated in POV Ray 
+			mark_specular = 1;
+		//}
+	}
+  }
+
+  // New for Radar Simulator
+
+
+
   /* Brilliance is likely to be 1.0 (default value) */
 
   if (Finish->Brilliance != 1.0)
@@ -2758,7 +2809,7 @@ static void Reflect(VECTOR IPoint, RAY *Ray, VECTOR Normal, VECTOR Raw_Normal, C
         n *= -2.0;
         VAddScaledEq(New_Ray.Direction, n, Jitter_Raw_Normal);
       }
-    }
+	}
     VNormalizeEq(New_Ray.Direction);
     /* NK & CEY ---- */
 
@@ -2772,6 +2823,7 @@ static void Reflect(VECTOR IPoint, RAY *Ray, VECTOR Normal, VECTOR Raw_Normal, C
     /* NK phmap - added checking for backtraceFlag */
     if(!backtraceFlag)
     {
+
     Trace (&New_Ray, Temp_Colour2, Weight);
     VAddEq(Colour, Temp_Colour2);
   }
@@ -3873,6 +3925,7 @@ static void compute_lighted_texture(COLOUR ResCol, TEXTURE *Texture, VECTOR IPoi
                   Layer->Finish->Reflection_Type, Layer->Finish->Reflection_Falloff, 
                   Cos_Angle_Incidence, Ray, Intersect->Object->Interior);
       }
+		
       else
       {
         Error("Reflection_Type 1 used with no interior.");
@@ -3967,6 +4020,16 @@ static void compute_lighted_texture(COLOUR ResCol, TEXTURE *Texture, VECTOR IPoi
          photons (or other valuable information */
       photonOptions.objectFlags = Intersect->Object->Flags;
 
+
+
+
+
+	  // New for Radar Simulator !!!!!!!!!!!!!!!!!!!!!!!
+		
+	  Assign_Vector(Direction_Current_Ray, Ray->Direction);
+
+	  // New for Radar Simulator !!!!!!!!!!!!!!!!!!!!!!!
+
       /* Add diffuse, phong, specular, and iridescence contribution. */
       Diffuse(Layer->Finish, Intersect->IPoint, Ray, LayNormal, LayCol, TmpCol, Att, Intersect->Object);
       
@@ -3974,7 +4037,20 @@ static void compute_lighted_texture(COLOUR ResCol, TEXTURE *Texture, VECTOR IPoi
       TmpCol[0]*=FilCol[0];
       TmpCol[1]*=FilCol[1];
       TmpCol[2]*=FilCol[2];
-      
+
+
+	  // New for Radar Simulator !!!!!!!!!!!!!!!!!!!!!!!
+	  // Store intensity value for blue channel
+	  // Store temporarily conductivity of material at current intersection point
+
+	  Intensity_Radar = TmpCol[2];
+	  Reflectivity_Bounce_Temp = ListReflec[layer_number][2];
+	  
+	  // New for Radar Simulator !!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+
       /* now add the temp color to the resulting color */
       VAddEq(ResCol, TmpCol);
 
@@ -4020,7 +4096,7 @@ static void compute_lighted_texture(COLOUR ResCol, TEXTURE *Texture, VECTOR IPoi
         FilCol[1]*=min(1.0,1.0-ListReflec[layer_number][1]);
         FilCol[2]*=min(1.0,1.0-ListReflec[layer_number][2]);
       }
-    }
+	}
 
     /* Get new remaining translucency. */
 
@@ -4108,6 +4184,179 @@ static void compute_lighted_texture(COLOUR ResCol, TEXTURE *Texture, VECTOR IPoi
     }
   }
 
+
+   
+   //new for radar simulator!!!!!!!!!!!!
+  
+  //********************************************************************
+
+  if (SAR_Output_Data_Flag == 1.0){
+
+	//if(Intensity_Radar > 0){
+
+	// Save intensity information
+  
+	// - Slant-Range 
+
+	// - Azimuth --> Azimuth_Initial
+
+	// - Intensity 
+
+	// - Multiple Bounce --> Trace_Level (int)
+
+	// - Specular conductivity at intersection point: Reflectivity_Bounce
+
+	//**************************************************************************
+
+	// Compute distance between image and last object
+
+	DBL Slant_Range, Azimuth, Elevation;
+
+	switch (Frame.Camera->Type)
+	{
+		case ORTHOGRAPHIC_CAMERA:	
+
+			VECTOR Direction_Radar,IPoint_Plane;
+			VECTOR C,I,d,L,I_im;
+			double s,s_2D,a,b;
+
+			I_im[0] = 0; I_im[1] = 0; I_im[2] = 0;
+			
+			// Slant-Range-Coordinate
+
+			// single bounce
+			if(Trace_Level == 1){
+				Slant_Range = Total_Depth; // if cam-position = pixel center
+				Azimuth = Azimuth_Initial; // Azimuth coordinate
+				Elevation = Elevation_Initial;
+			}
+
+			// multiple bounce
+			if(Trace_Level > 1){
+
+				DBL factor_r = -1;
+
+				// vector starting from current object point (= inverse direction to direction of primary ray)
+				VScale(Direction_Radar,Direction_Primary_Ray,factor_r);
+
+				// Intersection point between straight starting from current object point (inverse direction of primary ray)
+				// and image plane
+
+				// Used function: straight_intersection (function can be found in header-file "vector.h")
+
+				// Input:
+				// - IPoint_Radar: intersection point at last object
+				// - Direction_Radar: inverse direction of primary ray
+				// - Pixel_Initial_Radar: position of pixel center (absolute coordinates)
+				// - Direction_Primary_Ray: direction of primary ray	
+
+				// Output: 
+				// - IPoint_Plane: Intersection point within plane
+
+				straight_intersection(IPoint_Plane,IPoint,Direction_Radar,Pixel_Initial_Radar,Direction_Primary_Ray);
+
+				// Calculate spatial distance between intersection point (within image plane) and current object point
+				VDist(Distance_Radar,IPoint_Plane,IPoint);
+
+				Slant_Range = (Total_Depth+Distance_Radar)/2; 
+
+				//***********************************************************************************************************
+				
+
+				// C: Camera->Location
+				// I: IPoint_Plane
+				// L: Camera->Look_At 
+
+				C[0]=Frame.Camera->Location[0];C[1]=Frame.Camera->Location[2];C[2]=Frame.Camera->Location[1];
+				I[0]=IPoint_Plane[0]; I[1]=IPoint_Plane[2]; I[2]=IPoint_Plane[1];
+				L[0]=Frame.Camera->Look_At[0]; L[1]=Frame.Camera->Look_At[2]; L[2]=Frame.Camera->Look_At[1];
+
+				// Direction vector of primary rays
+				VSub(d,L,C);
+
+				// distance in 3D
+				VDist(s,L,C);
+
+				// distance in 2D
+				s_2D = sqrt(pow(d[0],2)+pow(d[1],2));
+
+				// angles
+				double pi = 3.1415926535;
+
+				a = atan2(d[0],d[1]); // angle around z
+				b = atan2(d[2],s_2D); // angle around x 
+
+				//--------------------------------------------------------------------------
+
+				// Image Coordinates
+
+				// Constraint: Looking direction = y-direction
+
+				// To be found: 
+				// - Image Coordinates of Intersection Point
+				
+				//--------------------------------------------------------------------------
+
+				// Shift to image center
+				VSub(I_im,I,C);
+
+				// Rotation
+				TRANSFORM Rot_1,Rot_2; // rotation matrices
+				MZero(Rot_1.matrix);
+				MZero(Rot_2.matrix);
+				
+				// Rotation around z
+				Rot_1.matrix[0][0]=cos(-a);Rot_1.matrix[0][1]=-sin(-a);Rot_1.matrix[0][2]=0;
+				Rot_1.matrix[1][0]=sin(-a);Rot_1.matrix[1][1]=cos(-a);Rot_1.matrix[1][2]=0;
+				Rot_1.matrix[2][0]=0;Rot_1.matrix[2][1]=0;Rot_1.matrix[2][2]=1;
+
+				// Rotation around x
+				Rot_2.matrix[0][0]=1;Rot_2.matrix[0][1]=0;Rot_2.matrix[0][2]=0;
+				Rot_2.matrix[1][0]=0;Rot_2.matrix[1][1]=cos(b);Rot_2.matrix[1][2]=-sin(b);
+				Rot_2.matrix[2][0]=0;Rot_2.matrix[2][1]=sin(b);Rot_2.matrix[2][2]=cos(b);
+
+				// Apply rotations
+				MTransPoint(I_im, I_im, &Rot_1); // Rotation around z
+				MTransPoint(I_im, I_im, &Rot_2); // Rotation around x
+
+				// Azimuth Coordinate
+				Azimuth = (Azimuth_Initial+I_im[0])/2;
+				Elevation = (Elevation_Initial+I_im[2])/2;				
+			}
+
+			//***********************************************************************************************************
+			// Write information to file
+
+			// - Azimuth coordinate [m]
+			// - Slant Range coordinate [m]
+			// - Elevation coordinate [m]
+			// - Intensity 
+			// - Bounce Level
+			// - Flag for reflection effects derived on specular way	
+
+			if (SAR_Intersection_Flag == 1.0){
+				
+				fprintf (pFile_A, "%f %f %f %f %d %d %f %f %f \n",Azimuth,Slant_Range,Elevation,Intensity_Radar*Reflectivity_Bounce,Trace_Level,mark_specular,IPoint[0],IPoint[1],IPoint[2]);		
+				
+			}
+			else{
+
+				if (Intensity_Radar > 10e-6){
+					fprintf (pFile_A, "%f %f %f %f %d %d \n",Azimuth,Slant_Range,Elevation,Intensity_Radar*Reflectivity_Bounce,Trace_Level,mark_specular);
+				}
+			}
+
+			break;
+		}
+  }
+
+  // Store conductivity factor to be applied for next bounce level
+  Reflectivity_Bounce *= Reflectivity_Bounce_Temp;
+	  
+  //new for radar simulator!!!!!!!!!!!!
+  
+ 
+
   /*
    * Calculate reflected component.
    *
@@ -4117,6 +4366,7 @@ static void compute_lighted_texture(COLOUR ResCol, TEXTURE *Texture, VECTOR IPoi
 
   if (opts.Quality_Flags & Q_REFLECT)
   {
+
     for (i = 0; i < layer_number; i++)
     {
       if ((!TIR_occured) ||
@@ -4124,10 +4374,12 @@ static void compute_lighted_texture(COLOUR ResCol, TEXTURE *Texture, VECTOR IPoi
           (fabs(TopNormal[1]-ListNormal[i][1]) > EPSILON) ||
           (fabs(TopNormal[2]-ListNormal[i][2]) > EPSILON))
       {
+
         if ((ListReflec[i][0] != 0.0) ||
             (ListReflec[i][1] != 0.0) ||
             (ListReflec[i][2] != 0.0))
-        {
+		{
+
           Reflect(Intersect->IPoint, Ray,
             ListNormal[i], Raw_Normal, RflCol, ListWeight[i]);
           // Since we've done a refleciton, we may have gathered photons and

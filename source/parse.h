@@ -25,7 +25,7 @@
  * $File: //depot/povray/3.6-release/source/parse.h $
  * $Revision: #2 $
  * $Change: 2939 $
- * $DateTime: 2004/07/04 13:43:26 $
+ * $DateTime: 2004/07/05 03:43:26 $
  * $Author: root $
  * $Log$
  *****************************************************************************/
@@ -624,7 +624,17 @@ enum TOKEN_IDS
   NOISE_GENERATOR_TOKEN,
   JULIA_TOKEN,
   MAGNET_TOKEN,
+
+  // !!!! New for SAR simulator
+  // added by Stefan Auer, May 2009
+  
+  SAR_OUTPUT_DATA_TOKEN,
+  SAR_INTERSECTION_TOKEN,
+
+  // !!!! New for SAR simulator
+
   LAST_TOKEN
+
 #ifdef GLOBAL_PHOTONS
   GLOBAL_TOKEN,
 #endif
@@ -656,6 +666,13 @@ extern short LValue_Ok;
 
 extern CAMERA *Default_Camera;
 
+// !!!! New for SAR simulator
+  // added by Stefan Auer, May 2009
+
+extern DBL SAR_Output_Data_Flag;
+extern DBL SAR_Intersection_Flag;
+
+// !!!
 
 /*****************************************************************************
 * Global functions
